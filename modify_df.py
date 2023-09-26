@@ -34,6 +34,43 @@ def split_df_by_cell_line(df,k):
     
     return train_df, test_df
 
+def split_df_by_cell_line_val(df,k):
+    '''
+    Takes in df, splits data based on cell line
+    k value should be a tuple, fraction of train, test, val, (0.7,0.2,0.1) for example
+    
+    '''
+    
+    train_k, test_k, val_k  = k
+    
+    k1 = train_k
+    
+    k2 = train_k+test_k
+    
+    cell_line_names = df['Cell Line Name'].unique()
+    
+    np.random.shuffle(cell_line_names)
+    
+    train, test , val = [], [], []
+
+    train_cellline = set(cell_line_names[:int(k1*len(cell_line_names))])
+    test_cellline = set(cell_line_names[int(k1*len(cell_line_names)):int(k2*len(cell_line_names))])
+    val_cellline = set(cell_line_names[int(k2*len(cell_line_names)):])
+ 
+    for _, row in df.iterrows():
+        if row['Cell Line Name'] in train_cellline:
+            train.append(row)
+        elif row['Cell Line Name'] in test_cellline:
+            test.append(row)
+            
+        else:
+            val.append(row)
+    
+    train_df = pd.DataFrame(train)
+    test_df = pd.DataFrame(test)
+    val_df = pd.DataFrame(val)
+    
+    return train_df, test_df,val_df
 
 def split_df_by_drugname(df,k):
     '''
