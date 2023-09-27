@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.metrics import roc_curve, roc_auc_score, mean_squared_error
 
 import joblib
 
@@ -15,7 +15,49 @@ import numpy as np
 
 import shap
 
+'''
+Calculated feature importance as the z score of the mse error loss difference between baseline and without feature model
 
+'''
+def calculate_feature_importance(X: pd.DataFrame,
+                                 y: pd.DataFrame, 
+                                 dir:str):
+    y_pred_base = joblib.load(f'{dir}/baseline.pkl').predict(X)
+    base_mse = mean_squared_error(y,y_pred_base)
+    
+    df_raw_mse_score = pd.DataFrame(index=X.columns, columns=['MSE_dif'])
+    df_z_score = pd.DataFrame(index=X.columns, columns=['z-score'])
+    
+    for feature in X.columns:
+        
+        x_without_feat = X.drop(columns=[feature])
+        
+        model_without_feat = joblib.load(f'{dir}/without_{feature}.pkl')
+        
+        y_pred_without_feat = model_without_feat.predict(x_without_feat)
+        
+        mse_without_feat  = mean_squared_error(y, y_pred_without_feat)
+        
+        df_raw_mse_score.loc[feature, 'MSE_dif'] = base_mse - mse_without_feat
+    
+    
+    sd_mse_change = (df_raw_mse_score['MSE_dif'].abs()).std()
+
+    for feature in df_raw_mse_score.index:
+        mse_score = df_raw_mse_score.loc[feature,'MSE_dif']
+        z_score = (mse_score)/(sd_mse_change)
+        df_z_score.loc[feature,"z-score"] = z_score
+        
+        
+    df_z_score['z-score'] = pd.to_numeric(df_z_score['z-score'], errors='coerce')
+
+    
+    
+    return df_z_score
+
+
+#for ROC_AUC, not used
+'''
 def calculate_feature_importance(X:pd.DataFrame,y:pd.DataFrame,dir:str):
 
 
@@ -53,7 +95,7 @@ def calculate_feature_importance(X:pd.DataFrame,y:pd.DataFrame,dir:str):
     df_z_score['z-score'] = pd.to_numeric(df_z_score['z-score'], errors='coerce')
     
     return df_z_score
-
+'''
 def calculate_dnn_feature_importance(X:pd.DataFrame, y: pd.DataFrame, model, 
                                      do_permutation = False, do_ablation = False, do_shap = False):
     
@@ -126,18 +168,20 @@ def graph_nn_model(model, sample_input, filename):
 
 if __name__ == '__main__':
     
-    random_data = pd.DataFrame({'x1':[random.random() for _ in range(20)],
-                                'x2':[random.random() for _ in range(20)],
-                                'x3':[random.random() for _ in range(20)],
-                                'x4':[random.random() for _ in range(20)],
-                                'x5':[random.random() for _ in range(20)],
-                                'y':[0 if x < 0.5 else 1 for x in [random.random() for _ in range(20)]]})
+    random_data = pd.DataFrame({'x1':[random.random() for _ in range(30)],
+                                'x2':[random.random() for _ in range(30)],
+                                'x3':[random.random() for _ in range(30)],
+                                'x4':[random.random() for _ in range(30)],
+                                'x5':[random.random() for _ in range(30)],
+                                'y':[0 if x < 0.5 else 1 for x in [random.random() for _ in range(30)]]})
     
     x_data = random_data.drop(['y'],axis = 1)
     y_data= random_data['y']
-
-    #assert(isinstance(calculate_feature_importance(x_data,y_data,'./models_made/test/gb'), pd.DataFrame))
     
+    assert(isinstance(calculate_feature_importance(x_data,y_data,'./models_made/test/linres'), pd.DataFrame))
+    assert(isinstance(calculate_feature_importance(x_data,y_data,'./models_made/test/svc'), pd.DataFrame))
+    assert(isinstance(calculate_feature_importance(x_data,y_data,'./models_made/test/gb'), pd.DataFrame))
+
     sample_model = nn.Sequential(
         nn.Linear(5,3),
         nn.ReLU(inplace=True),
@@ -152,5 +196,3 @@ if __name__ == '__main__':
     
     feature = calculate_dnn_feature_importance(x_data, y_data, sample_model,
                                                do_permutation=True, do_ablation=True,do_shap=True )
-    
-    print(feature)

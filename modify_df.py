@@ -97,3 +97,32 @@ def split_df_by_drugname(df,k):
     test_df = pd.DataFrame(test)
     
     return train_df, test_df
+
+def split_df_by_specific_drug(df,k, drugname):
+    '''
+    Takes in df, selects a particular drug,splits data based on cell line
+    
+    '''
+    
+    df = df[df['Drug Name'] == drugname]
+    
+    cell_line_names = df['Cell Line Name'].unique()
+    
+    np.random.shuffle(cell_line_names)
+    
+    train, test = [], []
+
+    train_cellline = set(cell_line_names[:int(k*len(cell_line_names))])
+    test_cellline = set(cell_line_names[int(k*len(cell_line_names)):])
+    
+ 
+    for _, row in df.iterrows():
+        if row['Cell Line Name'] in train_cellline:
+            train.append(row)
+        else:
+            test.append(row)
+    
+    train_df = pd.DataFrame(train)
+    test_df = pd.DataFrame(test)
+    
+    return train_df, test_df
