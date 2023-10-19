@@ -21,6 +21,9 @@ def he_linear(in_dim, out_dim, nonlinearity = 'leaky_relu'):
     
     #nonlinearity: relu, leaky_relu, swish
     
+    if nonlinearity !="relu":
+        nonlinearity = 'leaky_relu'
+    
     linear = nn.Linear(in_dim,out_dim)
     
     init.kaiming_normal_(linear.weight, mode='fan_in', nonlinearity=nonlinearity)
@@ -54,6 +57,14 @@ class linear_model(nn.Module):
             
         elif activation == 'leaky_relu':
             layer_actf = nn.LeakyReLU(negative_slope=0.01,inplace=True)
+            
+        elif activation == "swish":
+            layer_actf = nn.SiLU(inplace=True)
+            
+        elif activation == "gelu":
+            layer_actf = nn.GELU()
+            
+        
             
         layer_dropout = nn.Identity() if (dropout_perc == 0) else nn.Dropout(p=dropout_perc)
         
@@ -117,30 +128,31 @@ class CustomDataset(Dataset):
     
     '''
     def __init__(self, x_df,y_df):
-        self.x_df = x_df
-        self.y_df = y_df
 
+        self.x_tensor = torch.tensor(x_df.values, dtype=torch.float32)
+        self.y_tensor = torch.tensor(y_df.values, dtype=torch.float32)
     def __len__(self):
-        return len(self.x_df)
+        return len(self.x_tensor)
 
-    def __getitem__(self, idx):
+    def __getitem__(self,idx):
+        return (self.x_tensor[idx], self.y_tensor[idx])
 
-        return (torch.tensor(self.x_df.iloc[idx])  , torch.tensor(self.y_df.iloc[idx]))
-        
-        
         
         
 class random_search:
     
     def __init__(self,
                  device,
-                 random_seed: int = None):
+                 random_seed: int = None,
+                 num_models_to_save: int = 5):
 
         self.device = device
         self.best_params = None
         self.best_performance = float('inf')
         self.best_model =  None
+        self.best_models = {}
         self.random_seed = random_seed
+        self.num_models_to_save = num_models_to_save
         
 
         self.results = {}
@@ -163,6 +175,18 @@ class random_search:
         if self.best_model is not None:
             torch.save(self.best_model, dir)
     
+    def get_best_model(self,len):
+        if len(self.results) == 0:
+            return None
+        
+        self.result = dict(sorted(self.results.items(), key= lambda item: item[1][1]))
+        
+        models_to_return = []
+        
+        for key, items in self.result.items():
+            models_to_return.append(key)
+            
+        return models_to_return
     
     def get_result(self):
         
@@ -190,8 +214,10 @@ class random_search:
                epochs: int,
                search_space: dict,
                batchsize: int = 256,
+               test_batchsize: int = 2048,
                tolerance: int = 3,
-               
+               num_workers: int = 4,
+               pin_memory: bool = True
                
                ):
 
@@ -201,22 +227,20 @@ class random_search:
         
         train_dataset = CustomDataset(train_x,train_y)
         
-        train_loader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True)
-        
+        train_loader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True, num_workers=num_workers,pin_memory=pin_memory)
         
         
         val_x, val_y = val_data
         
         val_dataset = CustomDataset(val_x,val_y)
         
-        val_loader = DataLoader(val_dataset, batch_size=batchsize)
-        
+        val_loader = DataLoader(val_dataset, batch_size=test_batchsize,  num_workers=num_workers,pin_memory=pin_memory)
         
         test_x, test_y = test_data
             
         test_dataset = CustomDataset(test_x,test_y)
 
-        test_loader = DataLoader(test_dataset, batch_size=batchsize)
+        test_loader = DataLoader(test_dataset, batch_size=test_batchsize,  num_workers=num_workers,pin_memory=pin_memory)
         
         for i in range(max_iter):
             
@@ -272,9 +296,6 @@ class random_search:
                 for data in train_loader:
                     inputs, labels = data
                     
-                    inputs = inputs.to(torch.float32)
-                    labels = labels.float()
-                    
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
                     
                     optimizer.zero_grad()
@@ -294,8 +315,6 @@ class random_search:
                 with torch.no_grad():
                     for data in val_loader:
                         inputs, labels = data
-                        inputs = inputs.to(torch.float32)
-                        labels = labels.float()
                         inputs, labels = inputs.to(self.device), labels.to(self.device)
                         
                         outputs = testing_model(inputs)
@@ -333,8 +352,6 @@ class random_search:
             with torch.no_grad():
                 for data in test_loader:
                     inputs, labels = data
-                    inputs = inputs.to(torch.float32)
-                    labels = labels.float()
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
                     
                     outputs = testing_model(inputs)
@@ -351,7 +368,12 @@ class random_search:
                 self.best_model = testing_model
                 
                 self.best_performance=testing_total_loss
+            """
                 
+            if len(self.best_models) < 5:
+                self.best_models[testing_model] = testing_total_loss
+                self.best_models = {k}
+              """  
             print(f'Testing Total loss: {testing_total_loss}')
             print() 
 

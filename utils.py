@@ -15,6 +15,8 @@ import numpy as np
 
 import shap
 
+import config
+
 '''
 Calculated feature importance as the z score of the mse error loss difference between baseline and without feature model
 
@@ -101,8 +103,8 @@ def calculate_dnn_feature_importance(X:pd.DataFrame, y: pd.DataFrame, model,
     
     df_feature_importance = pd.DataFrame(index=X.columns)
     
-    x_tensor = torch.tensor(X.values).to(torch.float32)
-    y_tensor = torch.tensor(y.values).to(torch.float32).unsqueeze(1)
+    x_tensor = torch.tensor(X.values).to(torch.float32).to(config.DEVICE)
+    y_tensor = torch.tensor(y.values).to(torch.float32).to(config.DEVICE)
     
     if do_permutation:
         
@@ -118,12 +120,18 @@ def calculate_dnn_feature_importance(X:pd.DataFrame, y: pd.DataFrame, model,
             test_x = X.copy()
             np.random.shuffle(test_x[feature].values)
 
-            y_pred = model(torch.tensor(test_x.values).to(torch.float32))
+            y_pred = model(torch.tensor(test_x.values).to(torch.float32).to(config.DEVICE)).to(config.DEVICE)
+            y_pred = y_pred
+            
             
             mse_loss = F.mse_loss(y_tensor, y_pred).item()
             
             df_feature_importance.loc[feature, 'permutation'] = (mse_loss-baseline_loss)
             
+        
+        std = (df_feature_importance.std())['permutation']
+        df_feature_importance['permutation'] = pd.to_numeric(df_feature_importance['permutation']/std)
+        df_feature_importance['feature_name'] = X.columns
             
     if do_ablation:
         df_feature_importance['ablation'] = [0 for _ in range(len(X.columns))]

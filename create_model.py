@@ -30,6 +30,8 @@ import joblib
 
 from config import rand_var
 
+from tqdm import tqdm
+
 
 class DropCollinear(BaseEstimator, TransformerMixin):
     
@@ -301,7 +303,7 @@ def create_all_models(X:pd.DataFrame,
                    model_iter = 100,
                    search_iter = 100,
                    unique_name_of_dir = "",
-                   
+                   create_model_for_feature_importance = False,
                    make_linres = True,
                    make_svc = True,
                    make_gb = True
@@ -334,6 +336,8 @@ def create_all_models(X:pd.DataFrame,
         dir_linres = f"{dir_save_all_model}/linres"
         os.makedirs(dir_linres,exist_ok=True)
         joblib.dump(linres_best_model,f"{dir_linres}/baseline.pkl")
+        
+        print("Finished Creating Linres model")
     
     
 
@@ -354,10 +358,21 @@ def create_all_models(X:pd.DataFrame,
         os.makedirs(dir_gb,exist_ok=True)
         
         joblib.dump(gb_best_model,f"{dir_gb}/baseline.pkl")
+        
+        print("Finished Creating GB model")
+    
+    print("Finished Creating Baseline Models")
+    
+    #only make baseline models
+    if not create_model_for_feature_importance:
+        if test:
+            return True
+        else:
+            return None
     
     list_of_features = X.columns.tolist()
     
-    for feature_to_drop in list_of_features:
+    for feature_to_drop in tqdm(list_of_features):
         x_dropped = X.drop([feature_to_drop],axis = 1)
         model_name = f'without_{feature_to_drop}.pkl'
         
